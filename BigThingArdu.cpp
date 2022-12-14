@@ -5,19 +5,15 @@
 bool g_registered = false;
 String g_execution_request = "null";
 
-static void callback(char* topic, byte* payload, unsigned int length) {
+static void callback(String& topic, String& payload) {
   Serial.print("Message arrived on topic: ");
   Serial.print(topic);
   Serial.print(". Message: ");
-  String payload_temp;
+  String payload_temp = payload;
 
-  for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
-    payload_temp += (char)payload[i];
-  }
-  Serial.println();
+  Serial.println(payload);
 
-  if (strncmp(topic, "MT/RESULT/REGISTER", 18) == 0) {
+  if (strncmp(topic.c_str(), "MT/RESULT/REGISTER", 18) == 0) {
     Serial.print("Register Result: ");
     if (payload_temp == "success") {
       Serial.println("success");
@@ -27,14 +23,16 @@ static void callback(char* topic, byte* payload, unsigned int length) {
       digitalWrite(13, LOW);
     }
     g_registered = true;
-  } else if (strncmp(topic, "MT/EXECUTE", 10) == 0) {
+  } else if (strncmp(topic.c_str(), "MT/EXECUTE", 10) == 0) {
     Serial.print("Execute ");
     Serial.println(topic);
 
     char* p_tok = NULL;
 
-    strtok_r((char*)topic, "/", &p_tok);  // skip 1
-    strtok_r(NULL, "/", &p_tok);          // skip 2
+    char topic_buf[256] = {0};
+    topic.toCharArray(topic_buf, topic.length());
+    strtok_r((char*)topic_buf, "/", &p_tok);  // skip 1
+    strtok_r(NULL, "/", &p_tok);              // skip 2
     char* function_name = strtok_r(NULL, "/", &p_tok);
     char* thing_name = strtok_r(NULL, "/", &p_tok);
     char* middleware_name = strtok_r(NULL, "/", &p_tok);
@@ -57,8 +55,10 @@ static void callback(char* topic, byte* payload, unsigned int length) {
     Serial.print("requester_name ");
     Serial.println(requester_name);
 
-    g_execution_request = String(scenario_name) + ":" + String(function_name) + "#" + String(thing_name) + "#" +
-                          String(middleware_name) + "#" + String(requester_name) + "#";
+    g_execution_request = String(scenario_name) + ":" + String(function_name) +
+                          "#" + String(thing_name) + "#" +
+                          String(middleware_name) + "#" +
+                          String(requester_name) + "#";
   }
 }
 
@@ -106,7 +106,8 @@ SoPFunction::~SoPFunction() {
 }
 
 void SoPFunction::AddTag(Tag& function_tag) {
-  this->function_tags_ = (Tag**)realloc(this->function_tags_, sizeof(Tag*) * (this->num_tags_ + 1));
+  this->function_tags_ = (Tag**)realloc(this->function_tags_,
+                                        sizeof(Tag*) * (this->num_tags_ + 1));
   this->function_tags_[this->num_tags_] = &function_tag;
   this->num_tags_++;
 }
@@ -121,7 +122,8 @@ int SoPFunction::Execute(DynamicJsonDocument* p_doc) {
     case INTEGER: {
       (*p_doc)["return_type"] = "integer";
       (*p_doc)["return_value"] = ((IntegerValue)this->callback_function_)();
-      // *(int*)this->return_value_ = ((IntegerValue)this->callback_function_)();
+      // *(int*)this->return_value_ =
+      // ((IntegerValue)this->callback_function_)();
       break;
     }
     case DOUBLE: {
@@ -164,7 +166,8 @@ SoPValue::SoPValue(const char* name, BoolValue value, int publish_cycle) {
   this->last_publish_time_ = 0;
 }
 
-SoPValue::SoPValue(const char* name, IntegerValue value, int min, int max, int publish_cycle) {
+SoPValue::SoPValue(const char* name, IntegerValue value, int min, int max,
+                   int publish_cycle) {
   this->name_ = String(name);
   this->value_type_ = INTEGER;
 
@@ -184,7 +187,8 @@ SoPValue::SoPValue(const char* name, IntegerValue value, int min, int max, int p
   this->last_publish_time_ = 0;
 }
 
-SoPValue::SoPValue(const char* name, StringValue value, int min, int max, int publish_cycle) {
+SoPValue::SoPValue(const char* name, StringValue value, int min, int max,
+                   int publish_cycle) {
   this->name_ = String(name);
   this->value_type_ = STRING;
 
@@ -194,7 +198,8 @@ SoPValue::SoPValue(const char* name, StringValue value, int min, int max, int pu
   this->last_publish_time_ = 0;
 }
 
-SoPValue::SoPValue(const char* name, DoubleValue value, double min, double max, int publish_cycle) {
+SoPValue::SoPValue(const char* name, DoubleValue value, double min, double max,
+                   int publish_cycle) {
   this->name_ = String(name);
   this->value_type_ = DOUBLE;
 
@@ -222,7 +227,8 @@ SoPValue::~SoPValue() {
 }
 
 void SoPValue::AddTag(Tag& value_tag) {
-  this->value_tags_ = (Tag**)realloc(this->value_tags_, sizeof(Tag*) * (this->num_tags_ + 1));
+  this->value_tags_ =
+      (Tag**)realloc(this->value_tags_, sizeof(Tag*) * (this->num_tags_ + 1));
   this->value_tags_[this->num_tags_] = &value_tag;
   this->num_tags_++;
 }
@@ -238,17 +244,23 @@ String SoPValue::Fetch() {
   switch (this->value_type_) {
     case INTEGER: {
       *(int*)this->new_value_ = ((IntegerValue)this->callback_function_)();
-      snprintf(buffer, MAX_BUFFER_SIZE, "{\"type\" : \"int\" , \"value\" : %d}\n", *(int*)this->new_value_);
+      snprintf(buffer, MAX_BUFFER_SIZE,
+               "{\"type\" : \"int\" , \"value\" : %d}\n",
+               *(int*)this->new_value_);
       break;
     }
     case DOUBLE: {
       *(double*)this->new_value_ = ((DoubleValue)this->callback_function_)();
-      snprintf(buffer, MAX_BUFFER_SIZE, "{\"type\" : \"double\" , \"value\" : %lf}\n", *(double*)this->new_value_);
+      snprintf(buffer, MAX_BUFFER_SIZE,
+               "{\"type\" : \"double\" , \"value\" : %lf}\n",
+               *(double*)this->new_value_);
       break;
     }
     case BOOL: {
       *(bool*)this->new_value_ = ((BoolValue)this->callback_function_)();
-      snprintf(buffer, MAX_BUFFER_SIZE, "{\"type\" : \"bool\" , \"value\" : %d}\n", *(bool*)this->new_value_);
+      snprintf(buffer, MAX_BUFFER_SIZE,
+               "{\"type\" : \"bool\" , \"value\" : %d}\n",
+               *(bool*)this->new_value_);
       break;
     }
     case STRING: {
@@ -266,11 +278,15 @@ String SoPValue::Fetch() {
 
 void BigThingArdu::Reconnect() {
   while (!this->mqtt_client_.connected()) {
-    if (this->mqtt_client_.connect(this->client_id_.c_str())) {  // 앞서 설정한 클라이언트 ID로 연결합니다.
-      this->mqtt_client_.subscribe("MT/RESULT/REGISTER/#");
-      this->mqtt_client_.subscribe("MT/EXECUTE/#");
-      Serial.println("Subscribe MT/RESULT/REGISTER/#");
-      Serial.println("Subscribe MT/EXECUTE/#");
+    // 앞서 설정한 클라이언트 ID로 연결합니다.
+    if (this->mqtt_client_.connect(this->client_id_.c_str())) {
+      String result_register_topic = "MT/RESULT/REGISTER/" + this->client_id_;
+      String execute_topic = "MT/EXECUTE/" + this->client_id_;
+      this->mqtt_client_.subscribe(result_register_topic.c_str());
+      this->mqtt_client_.subscribe(execute_topic.c_str());
+      Serial.println(String("Subscribe MT/RESULT/REGISTER/") +
+                     this->client_id_);
+      Serial.println(String("Subscribe MT/EXECUTE/#"));
     } else {
       delay(5000);
       Serial.println("Reconnect...");
@@ -294,7 +310,8 @@ static bool CheckPublishCyclePassed(SoPValue* v) {
   diff_time = curr_time - v->last_publish_time_;
 
   // millis() goes back to zero after approximately 50 days
-  if ((diff_time < 0) || (diff_time >= (unsigned long)v->publish_cycle_ * 1000)) {
+  if ((diff_time < 0) ||
+      (diff_time >= (unsigned long)v->publish_cycle_ * 1000)) {
     v->last_publish_time_ = millis();
     passed = true;
   } else {
@@ -320,7 +337,8 @@ bool BigThingArdu::CheckAliveCyclePassed() {
   diff_time = curr_time - this->last_alive_time_;
 
   // millis() goes back to zero after approximately 50 days
-  if ((diff_time < 0) || (diff_time >= (unsigned long)this->alive_cycle_ / 2 * 1000)) {
+  if ((diff_time < 0) ||
+      (diff_time >= (unsigned long)this->alive_cycle_ / 2 * 1000)) {
     this->last_alive_time_ = millis();
     passed = true;
   } else {
@@ -368,7 +386,8 @@ void BigThingArdu::SendFunctionResult() {
 
   if (g_execution_request == "null") return;
 
-  char* scenario_name = strtok_r((char*)g_execution_request.c_str(), ":", &p_tok);
+  char* scenario_name =
+      strtok_r((char*)g_execution_request.c_str(), ":", &p_tok);
   char* function_name = strtok_r(NULL, "#", &p_tok);
   char* thing_name = strtok_r(NULL, "#", &p_tok);
   char* middleware_name = strtok_r(NULL, "#", &p_tok);
@@ -414,8 +433,8 @@ void BigThingArdu::SendFunctionResult() {
 }
 
 void BigThingArdu::Register() {
-  DynamicJsonDocument doc(1024);
-  char json_string[1024];
+  DynamicJsonDocument doc(MAX_MQTT_PAYLOAD_SIZE);
+  char json_string[MAX_MQTT_PAYLOAD_SIZE];
 
   if (g_registered) return;
 
@@ -487,7 +506,8 @@ void BigThingArdu::Register() {
   String topic = "TM/REGISTER/" + this->client_id_;
   String payload = String(json_string);
 
-  int ret = this->mqtt_client_.publish(topic.c_str(), payload.c_str());
+  int ret = this->mqtt_client_.publish(topic, payload);
+  // int ret = this->mqtt_client_.publish("/hello", "world");
   Serial.print(("Publish "));
   Serial.println((ret));
   Serial.println(topic.c_str());
@@ -497,16 +517,110 @@ void BigThingArdu::Register() {
 }
 
 void BigThingArdu::Setup(const char* broker_ip, int broker_port) {
+  this->mqtt_client_.begin(broker_ip, broker_port, this->wifi_client_);
+  this->mqtt_client_.onMessage(callback);
+
   this->mqtt_client_.subscribe("MT/RESULT/REGISTER/#");
   this->mqtt_client_.subscribe("MT/EXECUTE/#");
 
-  this->client_id_ += String(random(0xffff), HEX);
-  this->mqtt_client_.setBufferSize(1024);
-  this->mqtt_client_.setServer(broker_ip, broker_port);
-  this->mqtt_client_.setCallback(callback);
+  // this->mqtt_client_.setBufferSize(1024);
+  // this->mqtt_client_.setServer(broker_ip, broker_port);
+  // this->mqtt_client_.setCallback(callback);
 }
 
-long lastMsg = 0;
+#if defined(ARDUINO_ARCH_ESP8266)
+#pragma message "ESP8266 version SetupWifi is defined"
+
+void BigThingArdu::SetupWifi(const char* ssid, const char* password) {
+  this->client_id_ += String(random(0xffff), HEX);
+
+  while (!Serial) {
+    ;  // wait for serial port to connect. Needed for native USB port only
+  }
+
+  int status = WL_IDLE_STATUS;
+
+  WiFi.begin("network-name", "pass-to-network");
+
+  Serial.print("Connecting");
+  while (status != WL_CONNECTED) {
+    Serial.print("Attempting to connect to SSID: ");
+    Serial.println(ssid);
+    // Connect to WPA/WPA2 network. Change this line if using open or WEP
+    // network:
+    status = WiFi.begin(ssid, password);
+
+    // wait 10 seconds for connection:
+    delay(10000);
+  }
+  Serial.println();
+
+  Serial.print("Connected, IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+#elif defined(ARDUINO_SAMD_MKRWIFI1010) ||                                     \
+    defined(ARDUINO_SAMD_MKRVIDOR4000) || defined(ARDUINO_SAMD_NANO_33_IOT) || \
+    defined(ARDUINO_SAMD_NANO_RP2040_CONNECT) || defined(ARDUINO_ARCH_ESP32)
+#include <WiFiNINA.h>
+#pragma message "SAMD & ESP32 version SetupWifi is defined"
+
+void BigThingArdu::SetupWifi(const char* ssid, const char* password) {
+  this->client_id_ += String(random(0xffff), HEX);
+
+  while (!Serial) {
+    ;  // wait for serial port to connect. Needed for native USB port only
+  }
+
+  int status = WL_IDLE_STATUS;
+
+  // check for the presence of the shield:
+  if (WiFi.status() == WL_NO_SHIELD) {
+    Serial.println("WiFi shield not present");
+    // don't continue:
+    while (true)
+      ;
+  }
+
+  String fv = WiFi.firmwareVersion();
+  if (fv != "1.1.0") {
+    Serial.println("Please upgrade the firmware");
+  }
+
+  // attempt to connect to WiFi network:
+  while (status != WL_CONNECTED) {
+    Serial.print("Attempting to connect to SSID: ");
+    Serial.println(ssid);
+    // Connect to WPA/WPA2 network. Change this line if using open or WEP
+    // network:
+    status = WiFi.begin(ssid, password);
+
+    // wait 10 seconds for connection:
+    delay(10000);
+  }
+  Serial.println("Connected to WiFi");
+  printWifiStatus();
+}
+
+#endif
+
+// void BigThingArdu::SetupWifi(const char* ssid, const char* password) {
+//   this->client_id_ += String(random(0xffff), HEX);
+
+//   Serial.print("checking wifi...");
+//   while (WiFi.status() != WL_CONNECTED) {
+//     Serial.print(".");
+//     delay(500);
+//   }
+
+//   Serial.print("\nconnecting...");
+//   while (!this->wifi_client_.connect(this->client_id_.c_str())) {
+//     Serial.print(".");
+//     delay(500);
+//   }
+
+//   Serial.println("\nconnected!");
+// }
 
 void BigThingArdu::Loop() {
   if (!this->mqtt_client_.connected()) {
@@ -515,13 +629,17 @@ void BigThingArdu::Loop() {
 
   this->mqtt_client_.loop();
 
+#if defined(ARDUINO_ARCH_ESP8266)
+  delay(10);
+#endif
+
   if (g_registered) {
     this->SendFunctionResult();
   }
 
   long now = millis();
-  if (now - lastMsg > 1000) {
-    lastMsg = now;
+  if (now - this->lastMsg > 1000) {
+    this->lastMsg = now;
 
     if (g_registered) {
       this->SendAliveMessage();
@@ -557,9 +675,7 @@ void BigThingArdu::Add(SoPFunction& f) {
   }
 }
 
-BigThingArdu::BigThingArdu(const char* client_id, int alive_cycle, PubSubClient mqtt_client) {
-  this->mqtt_client_ = mqtt_client;
-
+BigThingArdu::BigThingArdu(const char* client_id, int alive_cycle) {
   this->client_id_ = String(client_id);
   this->alive_cycle_ = alive_cycle;
 
