@@ -147,6 +147,7 @@ class BigThingArdu {
 
   void Setup(const char* broker_ip, int broker_port);
   void SetupWifi(const char* ssid, const char* password);
+  void printWifiStatus();
   void Loop();
 
  private:

@@ -3,27 +3,39 @@
 bool g_registered = false;
 String g_execution_request = "null";
 
+void split_string(String str, char ch, String* arr) {
+  int index = 0;
+  int prev = 0;
+  for (int i = 0; i < str.length(); i++) {
+    if (str.charAt(i) == ch) {
+      arr[index] = str.substring(prev, i);
+      prev = i + 1;
+      index++;
+    }
+  }
+  arr[index] = str.substring(prev, str.length());
+}
+
 static void callback(String& topic, String& payload) {
   Serial.print("Message arrived on topic: ");
   Serial.print(topic);
-  Serial.print(". Message: ");
-  String payload_temp = payload;
+  Serial.print(" - Message: ");
 
-  Serial.println(payload);
+  DynamicJsonDocument doc(MAX_MQTT_PAYLOAD_SIZE);
+  deserializeJson(doc, payload);
 
   if (strncmp(topic.c_str(), "MT/RESULT/REGISTER", 18) == 0) {
     Serial.print("Register Result: ");
-    if (payload_temp == "success") {
+    if (doc["error"] == 0 or doc["error"] == -4) {
       Serial.println("success");
       digitalWrite(13, HIGH);
-    } else if (payload_temp == "fail") {
+    } else if (doc["error"] == -1) {
       Serial.println("fail");
       digitalWrite(13, LOW);
     }
     g_registered = true;
   } else if (strncmp(topic.c_str(), "MT/EXECUTE", 10) == 0) {
     Serial.print("Execute ");
-    Serial.println(topic);
 
     char* p_tok = NULL;
 
@@ -31,15 +43,13 @@ static void callback(String& topic, String& payload) {
     topic.toCharArray(topic_buf, topic.length());
     strtok_r((char*)topic_buf, "/", &p_tok);  // skip 1
     strtok_r(NULL, "/", &p_tok);              // skip 2
-    char* function_name = strtok_r(NULL, "/", &p_tok);
-    char* thing_name = strtok_r(NULL, "/", &p_tok);
-    char* middleware_name = strtok_r(NULL, "/", &p_tok);
-    char* requester_name = strtok_r(NULL, "/", &p_tok);
+    String function_name = String(strtok_r(NULL, "/", &p_tok));
+    String thing_name = String(strtok_r(NULL, "/", &p_tok));
+    String middleware_name = String(strtok_r(NULL, "/", &p_tok));
+    String requester_name = String(strtok_r(NULL, "/", &p_tok));
 
-    DynamicJsonDocument doc(128);
-    deserializeJson(doc, payload_temp.c_str());
-
-    const char* scenario_name = doc["scenario"];
+    const char* scenario_name_const = doc["scenario"];
+    String scenario_name = String(scenario_name_const);
 
     // debug
     Serial.print("scenario_name: ");
@@ -53,10 +63,13 @@ static void callback(String& topic, String& payload) {
     Serial.print(", requester_name: ");
     Serial.println(requester_name);
 
-    g_execution_request = String(scenario_name) + ":" + String(function_name) +
-                          "#" + String(thing_name) + "#" +
-                          String(middleware_name) + "#" +
-                          String(requester_name) + "#";
+    // g_execution_request = scenario_name + ":" + function_name +
+    //                       "#" + thing_name + "#" +
+    //                       middleware_name + "#" +
+    //                       requester_name + "#";
+    g_execution_request =
+        scenario_name + ":" + function_name + "#" + thing_name;
+    Serial.println(g_execution_request);
   }
 }
 
@@ -398,8 +411,8 @@ void BigThingArdu::SendFunctionResult() {
       strtok_r((char*)g_execution_request.c_str(), ":", &p_tok);
   char* function_name = strtok_r(NULL, "#", &p_tok);
   char* thing_name = strtok_r(NULL, "#", &p_tok);
-  char* middleware_name = strtok_r(NULL, "#", &p_tok);
-  char* requester_name = strtok_r(NULL, "#", &p_tok);
+  // char* middleware_name = strtok_r(NULL, "#", &p_tok);
+  // char* requester_name = strtok_r(NULL, "#", &p_tok);
 
   // Serial.println("SendFunctionResult");
   // Serial.print(("scenario_name "));
@@ -591,6 +604,23 @@ void BigThingArdu::SetupWifi(const char* ssid, const char* password) {
 }
 
 #endif
+
+void BigThingArdu::printWifiStatus() {
+  // print the SSID of the network you're attached to:
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  // print your WiFi shield's IP address:
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
+
+  // print the received signal strength:
+  long rssi = WiFi.RSSI();
+  Serial.print("signal strength (RSSI):");
+  Serial.print(rssi);
+  Serial.println(" dBm");
+}
 
 void BigThingArdu::Loop() {
   if (!this->mqtt_client_.connected()) {
