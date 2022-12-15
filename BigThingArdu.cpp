@@ -579,17 +579,16 @@ void BigThingArdu::SetupWifi(const char* ssid, const char* password) {
 #elif defined(ARDUINO_SAMD_MKRWIFI1010) ||                                     \
     defined(ARDUINO_SAMD_MKRVIDOR4000) || defined(ARDUINO_SAMD_NANO_33_IOT) || \
     defined(ARDUINO_SAMD_NANO_RP2040_CONNECT) || defined(ARDUINO_ARCH_ESP32)
-#include <WiFiNINA.h>
 #pragma message "SAMD & ESP32 version SetupWifi is defined"
 
 void BigThingArdu::SetupWifi(const char* ssid, const char* password) {
   this->client_id_ += String(random(0xffff), HEX);
   delay(1000);
 
-  String fv = WiFi.firmwareVersion();
-  if (fv != "1.1.0") {
-    Serial.println("Please upgrade the firmware");
-  }
+  // String fv = WiFi.firmwareVersion();
+  // if (fv != "1.1.0") {
+  //   Serial.println("Please upgrade the firmware");
+  // }
 
   Serial.print("Attempting to connect to SSID: ");
   Serial.println(ssid);
