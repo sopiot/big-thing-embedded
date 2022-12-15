@@ -1,6 +1,4 @@
-#include <ArduinoJson.h>
 #include <BigThingArdu.h>
-#include <SPI.h>
 
 bool g_registered = false;
 String g_execution_request = "null";

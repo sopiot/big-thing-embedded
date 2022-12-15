@@ -44,6 +44,9 @@ void setup() {
 
   thing.SetupWifi(ssid, password);
 
+  value_on_click.AddTag("button");
+  function_get_on_click.AddTag("button");
+
   thing.Add(value_on_click);
   thing.Add(function_get_on_click);
   thing.Setup(mqtt_server, mqtt_port);

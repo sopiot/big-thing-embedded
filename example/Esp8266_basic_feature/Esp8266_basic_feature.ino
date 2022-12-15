@@ -32,6 +32,11 @@ void setup() {
   Serial.begin(9600);
   thing.SetupWifi(ssid, password);
 
+  value_return_int.AddTag("basic");
+  value_return_double.AddTag("basic");
+  function_return_int.AddTag("basic");
+  function_return_double.AddTag("basic");
+
   thing.Add(value_return_int);
   thing.Add(value_return_double);
   // thing.Add(value_return_bool);
