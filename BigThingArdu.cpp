@@ -255,23 +255,38 @@ String SoPValue::Fetch() {
   switch (this->value_type_) {
     case INTEGER: {
       *(int*)this->new_value_ = ((IntegerValue)this->callback_function_)();
-      snprintf(buffer, MAX_BUFFER_SIZE,
-               "{\"type\" : \"int\" , \"value\" : %d}\n",
-               *(int*)this->new_value_);
+      if (*(int*)this->new_value_ == *(int*)this->prev_value_) {
+        return "";
+      } else {
+        snprintf(buffer, MAX_BUFFER_SIZE,
+                 "{\"type\" : \"int\" , \"value\" : %d}\n",
+                 *(int*)this->new_value_);
+        *(int*)this->prev_value_ = *(int*)this->new_value_;
+      }
       break;
     }
     case DOUBLE: {
       *(double*)this->new_value_ = ((DoubleValue)this->callback_function_)();
-      snprintf(buffer, MAX_BUFFER_SIZE,
-               "{\"type\" : \"double\" , \"value\" : %lf}\n",
-               *(double*)this->new_value_);
+      if (*(double*)this->new_value_ == *(double*)this->prev_value_) {
+        return "";
+      } else {
+        snprintf(buffer, MAX_BUFFER_SIZE,
+                 "{\"type\" : \"double\" , \"value\" : %lf}\n",
+                 *(double*)this->new_value_);
+        *(double*)this->prev_value_ = *(double*)this->new_value_;
+      }
       break;
     }
     case BOOL: {
       *(bool*)this->new_value_ = ((BoolValue)this->callback_function_)();
-      snprintf(buffer, MAX_BUFFER_SIZE,
-               "{\"type\" : \"bool\" , \"value\" : %d}\n",
-               *(bool*)this->new_value_);
+      if (*(bool*)this->new_value_ == *(bool*)this->prev_value_) {
+        return "";
+      } else {
+        snprintf(buffer, MAX_BUFFER_SIZE,
+                 "{\"type\" : \"bool\" , \"value\" : %lf}\n",
+                 *(bool*)this->new_value_);
+        *(bool*)this->prev_value_ = *(bool*)this->new_value_;
+      }
       break;
     }
     case STRING: {
@@ -391,10 +406,12 @@ void BigThingArdu::SendValue() {
       String topic = this->client_id_ + "/" + v->name_;
       String payload = v->Fetch();
 
-      this->mqtt_client_.publish(topic.c_str(), payload.c_str());
-      Serial.print(("Publish "));
-      Serial.println(topic.c_str());
-      Serial.println(payload.c_str());
+      if (payload != "") {
+        this->mqtt_client_.publish(topic.c_str(), payload.c_str());
+        Serial.print(("Publish "));
+        Serial.println(topic.c_str());
+        Serial.println(payload.c_str());
+      }
     } else {
       // pass
     }
