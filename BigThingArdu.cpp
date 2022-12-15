@@ -44,15 +44,15 @@ static void callback(String& topic, String& payload) {
     const char* scenario_name = doc["scenario"];
 
     // debug
-    Serial.print("scenario_name ");
-    Serial.println(scenario_name);
-    Serial.print("function_name ");
-    Serial.println(function_name);
-    Serial.print("thing_name ");
-    Serial.println(thing_name);
-    Serial.print("middleware_name ");
-    Serial.println(middleware_name);
-    Serial.print("requester_name ");
+    Serial.print("scenario_name: ");
+    Serial.print(scenario_name);
+    Serial.print(", function_name: ");
+    Serial.print(function_name);
+    Serial.print(", thing_name: ");
+    Serial.print(thing_name);
+    Serial.print(", middleware_name: ");
+    Serial.print(middleware_name);
+    Serial.print(", requester_name: ");
     Serial.println(requester_name);
 
     g_execution_request = String(scenario_name) + ":" + String(function_name) +
@@ -120,7 +120,7 @@ void SoPFunction::AddTag(const char* tag_name) {
 int SoPFunction::Execute(DynamicJsonDocument* p_doc) {
   switch (this->return_type_) {
     case INTEGER: {
-      (*p_doc)["return_type"] = "integer";
+      (*p_doc)["return_type"] = "int";
       (*p_doc)["return_value"] = ((IntegerValue)this->callback_function_)();
       // *(int*)this->return_value_ =
       // ((IntegerValue)this->callback_function_)();
@@ -280,17 +280,28 @@ void BigThingArdu::Reconnect() {
   while (!this->mqtt_client_.connected()) {
     // 앞서 설정한 클라이언트 ID로 연결합니다.
     if (this->mqtt_client_.connect(this->client_id_.c_str())) {
-      String result_register_topic = "MT/RESULT/REGISTER/" + this->client_id_;
-      String execute_topic = "MT/EXECUTE/" + this->client_id_;
-      this->mqtt_client_.subscribe(result_register_topic.c_str());
-      this->mqtt_client_.subscribe(execute_topic.c_str());
-      Serial.println(String("Subscribe MT/RESULT/REGISTER/") +
-                     this->client_id_);
-      Serial.println(String("Subscribe MT/EXECUTE/#"));
+      Serial.println("Connected to MQTT broker");
+      break;
     } else {
       delay(5000);
       Serial.println("Reconnect...");
     }
+  }
+
+  this->InitSubscribe();
+}
+
+void BigThingArdu::InitSubscribe() {
+  String register_result_topic =
+      String("MT/RESULT/REGISTER/") + this->client_id_;
+  Serial.println(String("Subscribe ") + register_result_topic);
+  this->mqtt_client_.subscribe(register_result_topic);
+  for (int i = 0; i < this->num_functions_; i++) {
+    SoPFunction* f = this->functions_[i];
+    String execute_topic = String("MT/EXECUTE/") + f->name_ + String("/") +
+                           this->client_id_ + String("/#");
+    Serial.println(String("Subscribe ") + execute_topic);
+    this->mqtt_client_.subscribe(execute_topic);
   }
 }
 
@@ -310,8 +321,7 @@ static bool CheckPublishCyclePassed(SoPValue* v) {
   diff_time = curr_time - v->last_publish_time_;
 
   // millis() goes back to zero after approximately 50 days
-  if ((diff_time < 0) ||
-      (diff_time >= (unsigned long)v->publish_cycle_ * 1000)) {
+  if ((diff_time < 0) || (diff_time >= (unsigned long)v->publish_cycle_)) {
     v->last_publish_time_ = millis();
     passed = true;
   } else {
@@ -393,17 +403,17 @@ void BigThingArdu::SendFunctionResult() {
   char* middleware_name = strtok_r(NULL, "#", &p_tok);
   char* requester_name = strtok_r(NULL, "#", &p_tok);
 
-  Serial.println("SendFunctionResult");
-  Serial.print(("scenario_name "));
-  Serial.println(scenario_name);
-  Serial.print(("thing_name "));
-  Serial.println(thing_name);
-  Serial.print(("function_name "));
-  Serial.println(function_name);
-  Serial.print(("middleware_name "));
-  Serial.println(middleware_name);
-  Serial.print(("requester_name "));
-  Serial.println(requester_name);
+  // Serial.println("SendFunctionResult");
+  // Serial.print(("scenario_name "));
+  // Serial.println(scenario_name);
+  // Serial.print(("thing_name "));
+  // Serial.println(thing_name);
+  // Serial.print(("function_name "));
+  // Serial.println(function_name);
+  // Serial.print(("middleware_name "));
+  // Serial.println(middleware_name);
+  // Serial.print(("requester_name "));
+  // Serial.println(requester_name);
 
   for (uint8_t i = 0; i < this->num_functions_; i++) {
     SoPFunction* f = this->functions_[i];
@@ -520,12 +530,18 @@ void BigThingArdu::Setup(const char* broker_ip, int broker_port) {
   this->mqtt_client_.begin(broker_ip, broker_port, this->wifi_client_);
   this->mqtt_client_.onMessage(callback);
 
-  this->mqtt_client_.subscribe("MT/RESULT/REGISTER/#");
-  this->mqtt_client_.subscribe("MT/EXECUTE/#");
+  while (!this->mqtt_client_.connected()) {
+    // 앞서 설정한 클라이언트 ID로 연결합니다.
+    if (this->mqtt_client_.connect(this->client_id_.c_str())) {
+      Serial.println("Connected to MQTT broker");
+      break;
+    } else {
+      delay(5000);
+      Serial.println("Reconnect...");
+    }
+  }
 
-  // this->mqtt_client_.setBufferSize(1024);
-  // this->mqtt_client_.setServer(broker_ip, broker_port);
-  // this->mqtt_client_.setCallback(callback);
+  this->InitSubscribe();
 }
 
 #if defined(ARDUINO_ARCH_ESP8266)
@@ -533,28 +549,18 @@ void BigThingArdu::Setup(const char* broker_ip, int broker_port) {
 
 void BigThingArdu::SetupWifi(const char* ssid, const char* password) {
   this->client_id_ += String(random(0xffff), HEX);
+  delay(1000);
 
-  while (!Serial) {
-    ;  // wait for serial port to connect. Needed for native USB port only
+  Serial.print("Attempting to connect to SSID: ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
   }
 
-  int status = WL_IDLE_STATUS;
-
-  WiFi.begin("network-name", "pass-to-network");
-
-  Serial.print("Connecting");
-  while (status != WL_CONNECTED) {
-    Serial.print("Attempting to connect to SSID: ");
-    Serial.println(ssid);
-    // Connect to WPA/WPA2 network. Change this line if using open or WEP
-    // network:
-    status = WiFi.begin(ssid, password);
-
-    // wait 10 seconds for connection:
-    delay(10000);
-  }
   Serial.println();
-
+  Serial.print(this->wifi_client_.connected());
   Serial.print("Connected, IP address: ");
   Serial.println(WiFi.localIP());
 }
@@ -567,60 +573,26 @@ void BigThingArdu::SetupWifi(const char* ssid, const char* password) {
 
 void BigThingArdu::SetupWifi(const char* ssid, const char* password) {
   this->client_id_ += String(random(0xffff), HEX);
-
-  while (!Serial) {
-    ;  // wait for serial port to connect. Needed for native USB port only
-  }
-
-  int status = WL_IDLE_STATUS;
-
-  // check for the presence of the shield:
-  if (WiFi.status() == WL_NO_SHIELD) {
-    Serial.println("WiFi shield not present");
-    // don't continue:
-    while (true)
-      ;
-  }
+  delay(1000);
 
   String fv = WiFi.firmwareVersion();
   if (fv != "1.1.0") {
     Serial.println("Please upgrade the firmware");
   }
 
-  // attempt to connect to WiFi network:
-  while (status != WL_CONNECTED) {
-    Serial.print("Attempting to connect to SSID: ");
-    Serial.println(ssid);
-    // Connect to WPA/WPA2 network. Change this line if using open or WEP
-    // network:
-    status = WiFi.begin(ssid, password);
-
-    // wait 10 seconds for connection:
-    delay(10000);
+  Serial.print("Attempting to connect to SSID: ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
   }
+
   Serial.println("Connected to WiFi");
   printWifiStatus();
 }
 
 #endif
-
-// void BigThingArdu::SetupWifi(const char* ssid, const char* password) {
-//   this->client_id_ += String(random(0xffff), HEX);
-
-//   Serial.print("checking wifi...");
-//   while (WiFi.status() != WL_CONNECTED) {
-//     Serial.print(".");
-//     delay(500);
-//   }
-
-//   Serial.print("\nconnecting...");
-//   while (!this->wifi_client_.connect(this->client_id_.c_str())) {
-//     Serial.print(".");
-//     delay(500);
-//   }
-
-//   Serial.println("\nconnected!");
-// }
 
 void BigThingArdu::Loop() {
   if (!this->mqtt_client_.connected()) {
@@ -635,19 +607,23 @@ void BigThingArdu::Loop() {
 
   if (g_registered) {
     this->SendFunctionResult();
+    this->SendAliveMessage();
+    this->SendValue();
+  } else {
+    this->Register();
   }
 
-  long now = millis();
-  if (now - this->lastMsg > 1000) {
-    this->lastMsg = now;
+  // long now = millis();
+  // if (now - this->lastMsg > 1000) {
+  //   this->lastMsg = now;
 
-    if (g_registered) {
-      this->SendAliveMessage();
-      this->SendValue();
-    } else {
-      this->Register();
-    }
-  }
+  //   if (g_registered) {
+  //     this->SendAliveMessage();
+  //     this->SendValue();
+  //   } else {
+  //     this->Register();
+  //   }
+  // }
 
   // delay(1000);
   // ESP.deepSleep(5e6);

@@ -151,6 +151,7 @@ class BigThingArdu {
 
  private:
   void Reconnect();
+  void InitSubscribe();
   bool CheckAliveCyclePassed();
   void SendAliveMessage();
   void SendValue();
@@ -158,7 +159,7 @@ class BigThingArdu {
   void Register();
 
   WiFiClient wifi_client_;
-  MQTTClient mqtt_client_ = MQTTClient(1024);
+  MQTTClient mqtt_client_ = MQTTClient(MAX_MQTT_PAYLOAD_SIZE);
   String client_id_;
   unsigned long alive_cycle_;
   unsigned long last_alive_time_;
